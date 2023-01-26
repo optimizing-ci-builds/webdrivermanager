@@ -13,7 +13,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: ubuntu-latest
+        os: windows-latest
         java:
         - 11
     runs-on: ${{ matrix.os }}
