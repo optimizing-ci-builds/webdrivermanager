@@ -1,10 +1,6 @@
 name: build
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+on: [push]
 
 env:
   DISPLAY: :99
@@ -18,51 +14,114 @@ jobs:
         java: [ 11 ]
     runs-on: ${{ matrix.os }}
     steps:
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.10'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas
+        pip install numpy
+    - run: sudo apt update
+    - run: sudo apt install inotify-tools
+    - run: inotifywait -mr /home/runner/work/webdrivermanager/webdrivermanager/ --format '%T;%w;%f;%e' --timefmt %T -o /home/runner/inotify-logs.csv & echo 'optimizing-ci-builds'
+    - run: touch starting_build_CheckoutGitHubrepo_21
+    - run: rm starting_build_CheckoutGitHubrepo_21
     - name: Checkout GitHub repo
       uses: actions/checkout@v2
+    - run: touch starting_build_SetupJava_23
+    - run: rm starting_build_SetupJava_23
     - name: Set up Java
       uses: actions/setup-java@v2
       with:
         distribution: 'temurin'
         java-version: ${{ matrix.java }}
+    - run: touch starting_build_StartXvfb_28
+    - run: rm starting_build_StartXvfb_28
     - name: Start Xvfb
-      if: matrix.os == 'ubuntu-latest'
       run: Xvfb $DISPLAY &
+    - run: touch starting_build_RuntestsonLinux_31
+    - run: rm starting_build_RuntestsonLinux_31
     - name: Run tests on Linux
-      if: matrix.os == 'ubuntu-latest'
       uses: nick-invision/retry@v2.7.1
       with:
         timeout_minutes: 30
         max_attempts: 3
         command: mvn -B test -Dtest=!Record*
+    - run: touch starting_build_RuntestsonMac_38
+    - run: rm starting_build_RuntestsonMac_38
     - name: Run tests on Mac
-      if: matrix.os == 'macos-latest'
       uses: nick-invision/retry@v2.7.1
       with:
         timeout_minutes: 30
         max_attempts: 3
         command: mvn -B test -Dtest=!Docker*,!Record*
+    - run: touch starting_build_RuntestsonWindows_45
+    - run: rm starting_build_RuntestsonWindows_45
     - name: Run tests on Windows
-      if: matrix.os == 'windows-latest'
       uses: nick-invision/retry@v2.7.1
       with:
         timeout_minutes: 30
         max_attempts: 3
         command: mvn -B test -Dtest=!Docker*
+    - run: touch starting_build_UploadanalysistoSonarCloud_52
+    - run: rm starting_build_UploadanalysistoSonarCloud_52
     - name: Upload analysis to SonarCloud
-      if: success() && matrix.os == 'ubuntu-latest' && matrix.java == '11' && !contains(github.ref, 'pull')
       run: >
         mvn -B sonar:sonar
         -Dsonar.host.url=https://sonarcloud.io
         -Dsonar.organization=bonigarcia-github
         -Dsonar.projectKey=io.github.bonigarcia:webdrivermanager
+    - run: touch starting_build_UploadcoveragetoCodecov_59
+    - run: rm starting_build_UploadcoveragetoCodecov_59
     - name: Upload coverage to Codecov
-      if: success() && matrix.os == 'ubuntu-latest' && matrix.java == '11' && !contains(github.ref, 'pull')
       uses: codecov/codecov-action@v1
+    - run: touch starting_build_StorerecordingsonlyavailableinWindows_62
+    - run: rm starting_build_StorerecordingsonlyavailableinWindows_62
     - name: Store recordings (only available in Windows)
-      if: always() && matrix.os == 'windows-latest'
       uses: actions/upload-artifact@v3
       with:
         name: webm-files
         path: |
           C:\Users\runneradmin\Downloads\*.webm
+    - run: touch starting_finished_finished_8979874
+      if: always()
+    - run: rm starting_finished_finished_8979874
+      if: always()
+    - name: rat check
+      if: always()
+      run: |
+         if [ -f /home/runner/work/webdrivermanager/webdrivermanager/target/rat.txt ]; then cat /home/runner/work/webdrivermanager/webdrivermanager/target/rat.txt; fi
+    - name: Check script file exists and execute
+      if: always()
+      run: |
+        [ -f .github/workflows/script.py ] && python .github/workflows/script.py
+        [ -f /home/runner/work/webdrivermanager/webdrivermanager/optimizing-ci-builds-ci-analysis/job.csv ] || mkdir -p /home/runner/work/webdrivermanager/webdrivermanager/optimizing-ci-builds-ci-analysis/; echo "${GITHUB_RUN_ID},${GITHUB_JOB},webdrivermanager,${GITHUB_WORKFLOW}" > /home/runner/work/webdrivermanager/webdrivermanager/optimizing-ci-builds-ci-analysis/job.csv
+    - name: Checkout to destination CI-analyzes repo
+      uses: actions/checkout@v3
+      if: always()
+      with:
+        path: webdrivermanager
+        ref: '1680156014-f3221fe'
+        repository: 'UT-SE-Research/ci-analyzes'
+        token: '${{ secrets.API_TOKEN_GITHUB }}'
+        persist-credentials: true
+    - name: Copy files to push to another directory
+      if: always()
+      run: |
+        mkdir -p webdrivermanager/webdrivermanager/.github/workflows/build/build_os_${{ matrix.os }}_java_${{ matrix.java }}
+        cp -rvT optimizing-ci-builds-ci-analysis webdrivermanager/webdrivermanager/.github/workflows/build/build_os_${{ matrix.os }}_java_${{ matrix.java }}
+    - run: echo https://github.com/UT-SE-Research/ci-analyzes/tree/1680156014-f3221fe/webdrivermanager/.github/workflows/build/build_os_${{ matrix.os }}_java_${{ matrix.java }}
+    - name: Pushes analysis to another repository
+      if: always()
+      working-directory: webdrivermanager
+      run: |
+        commit_message=$GITHUB_REPOSITORY@$GITHUB_WORKFLOW_SHA
+        git config --global user.name 'UT-SE-Research'
+        git config --global user.email '${{ secrets.EMAIL }}'
+        git add .
+        git commit -m $commit_message
+        while ! git push origin 1680156014-f3221fe; do
+          git pull --rebase origin 1680156014-f3221fe
+          sleep $((RANDOM % 5 + 1))
+        done
